@@ -221,8 +221,8 @@ func _body_specs() -> Array[Dictionary]:
 		{"name": "Mercury", "radius": 17.0, "style": "mercury"},
 		{"name": "Moon", "radius": 15.0, "style": "moon"},
 		{"name": "Makemake", "radius": 13.0, "style": "makemake"},
-		{"name": "Asteroid A", "radius": 11.0, "style": "asteroid_a"},
-		{"name": "Asteroid B", "radius": 9.0, "style": "asteroid_b"},
+		{"name": "Asteroid A", "radius": 13.0, "style": "asteroid_a"},
+		{"name": "Asteroid B", "radius": 11.0, "style": "asteroid_b"},
 	]
 
 
