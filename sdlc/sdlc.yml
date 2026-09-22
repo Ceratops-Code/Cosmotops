@@ -1,0 +1,120 @@
+version: 4
+kind: ceratops-sdlc
+repository:
+  capabilities:
+    adb:
+      executable: adb
+      platforms:
+        - windows
+    godot:
+      executable: godot
+      version: 4.7.2
+      platforms:
+        - windows
+    powershell:
+      executable: powershell.exe
+      platforms:
+        - windows
+    uv:
+      executable: uv
+  actions:
+    bootstrap:
+      requires:
+        capabilities:
+          - uv
+      steps:
+        - run:
+            - uv
+            - sync
+            - --project
+            - scripts
+            - --locked
+    validate:
+      requires:
+        capabilities:
+          - uv
+      steps:
+        - run:
+            - uv
+            - run
+            - --locked
+            - scripts/validate-repository.py
+    test:
+      requires:
+        capabilities: []
+      no-op: No repository test command has been detected or declared.
+deliverables:
+  apps:
+    cosmotops:
+      source: .
+      manifest: export_presets.cfg
+      prerequisites: []
+      actions:
+        validate:
+          requires:
+            capabilities:
+              - godot
+          parameters:
+            - godot_executable
+          steps:
+            - run:
+                - "{godot_executable}"
+                - --headless
+                - --editor
+                - --path
+                - .
+                - --quit
+        test:
+          requires:
+            capabilities: []
+          no-op: No persistent Godot automated test suite is committed.
+        install:
+          requires:
+            capabilities:
+              - adb
+              - godot
+              - powershell
+          parameters:
+            - godot_executable
+            - adb_executable
+            - device
+          steps:
+            - run:
+                - powershell.exe
+                - -NoProfile
+                - -Command
+                - New-Item -ItemType Directory -Force -Path 'build/android' | Out-Null
+            - run:
+                - "{godot_executable}"
+                - --headless
+                - --path
+                - .
+                - --install-android-build-template
+                - --export-debug
+                - Android
+                - build/android/Cosmotops.apk
+            - run:
+                - "{adb_executable}"
+                - -s
+                - "{device}"
+                - install
+                - -r
+                - build/android/Cosmotops.apk
+            - run:
+                - "{adb_executable}"
+                - -s
+                - "{device}"
+                - shell
+                - am
+                - start
+                - -W
+                - -n
+                - com.ceratopscode.cosmotops/com.godot.game.GodotAppLauncher
+            - run:
+                - "{adb_executable}"
+                - -s
+                - "{device}"
+                - shell
+                - pm
+                - path
+                - com.ceratopscode.cosmotops
