@@ -231,25 +231,66 @@ func _spawn_planets() -> void:
 	run_serial += 1
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	# Twelve separated cells guarantee a playable layout; assignment and jitter vary each run.
-	var slots: Array[Vector2] = [
-		Vector2(130.0, 180.0), Vector2(440.0, 180.0), Vector2(840.0, 180.0), Vector2(1150.0, 180.0),
-		Vector2(130.0, 390.0), Vector2(440.0, 390.0), Vector2(840.0, 390.0), Vector2(1150.0, 390.0),
-		Vector2(130.0, 600.0), Vector2(440.0, 600.0), Vector2(840.0, 600.0), Vector2(1150.0, 600.0),
-	]
 	var specs := _body_specs()
+	var positions := _random_target_positions(specs, rng)
 	for index in range(specs.size()):
-		var slot_index := rng.randi_range(0, slots.size() - 1)
-		var position_in_space: Vector2 = slots.pop_at(slot_index)
-		position_in_space += Vector2(rng.randf_range(-28.0, 28.0), rng.randf_range(-12.0, 12.0))
 		var spec: Dictionary = specs[index]
 		var planet: ColorPlanet = PlanetScene.new()
 		planet.configure(String(spec["name"]), float(spec["radius"]), String(spec["style"]), 1000 + run_serial * 101 + index * 37)
-		planet.position = position_in_space
+		planet.position = positions[index]
 		planet.z_index = 2
 		add_child(planet)
 		planets.append(planet)
 	total_targets = planets.size()
+
+
+func _random_target_positions(specs: Array[Dictionary], rng: RandomNumberGenerator) -> Array[Vector2]:
+	# Continuous sampling removes visible rows while keeping bodies, rings, labels, and the ship separated.
+	for layout_attempt in range(32):
+		var positions: Array[Vector2] = []
+		var extents: Array[float] = []
+		for spec in specs:
+			var extent := _layout_extent(spec)
+			var candidate := Vector2.ZERO
+			var placed := false
+			for candidate_attempt in range(500):
+				candidate = Vector2(
+					rng.randf_range(maxf(82.0, extent + 20.0), minf(1198.0, VIEW_SIZE.x - extent - 20.0)),
+					rng.randf_range(105.0 + extent, VIEW_SIZE.y - extent - 36.0)
+				)
+				if candidate.distance_to(SHIP_START) < extent + 92.0:
+					continue
+				var has_clearance := true
+				for other_index in range(positions.size()):
+					var required_distance := maxf(128.0, extent + extents[other_index] + 30.0)
+					if candidate.distance_to(positions[other_index]) < required_distance:
+						has_clearance = false
+						break
+				if has_clearance:
+					placed = true
+					break
+			if not placed:
+				break
+			positions.append(candidate)
+			extents.append(extent)
+		if positions.size() == specs.size():
+			return positions
+	# This irregular layout is reachable only if every randomized packing attempt fails.
+	return [
+		Vector2(150.0, 190.0), Vector2(1010.0, 590.0), Vector2(1130.0, 230.0),
+		Vector2(210.0, 550.0), Vector2(930.0, 170.0), Vector2(390.0, 250.0),
+		Vector2(1120.0, 430.0), Vector2(500.0, 590.0), Vector2(760.0, 185.0),
+		Vector2(315.0, 465.0), Vector2(760.0, 585.0), Vector2(510.0, 145.0),
+	]
+
+
+func _layout_extent(spec: Dictionary) -> float:
+	var radius := float(spec["radius"])
+	match String(spec["style"]):
+		"saturn": return radius * 1.75
+		"uranus": return radius * 1.38
+		"makemake": return radius * 1.30
+		_: return radius
 
 
 func _clear_planets() -> void:
