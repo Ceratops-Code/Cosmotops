@@ -12,7 +12,8 @@ Moon, Makemake, a black hole, and two asteroids before the meteor finale.
 
 Choose **Ready Ship**, then press any keyboard key, gamepad button, or tap to
 start the animated `5` to `1` countdown. The in-game header also provides Back,
-Reset, Pause/Resume, and Close buttons.
+Reset, Pause/Resume, and Close buttons. Capturing a target speaks its English
+name through the device's text-to-speech voice.
 
 ## Run locally
 

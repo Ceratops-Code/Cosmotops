@@ -9,7 +9,6 @@ const SFX_STREAMS := {
 	"click": preload("res://assets/sfx_click.ogg"),
 	"countdown": preload("res://assets/sfx_countdown.ogg"),
 	"start": preload("res://assets/sfx_start.ogg"),
-	"capture": preload("res://assets/sfx_capture.ogg"),
 	"meteor": preload("res://assets/sfx_meteor.ogg"),
 	"explosion": preload("res://assets/sfx_explosion.ogg"),
 }
@@ -81,11 +80,13 @@ var overlay_shade: ColorRect
 var message_label: Label
 var countdown_label: Label
 var shout_stream: AudioStreamWAV
+var tts_voice := ""
 
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
 	shout_stream = _make_shout_stream()
+	_setup_tts()
 	_make_stars()
 	_load_best_time()
 	_setup_overlay()
@@ -318,6 +319,7 @@ func _clear_planets() -> void:
 
 
 func _prepare_run() -> void:
+	_stop_target_speech()
 	_spawn_planets()
 	captured_count = 0
 	elapsed_time = 0.0
@@ -374,7 +376,7 @@ func _check_planet_contacts() -> void:
 		if ship.position.distance_to(planet.position) <= planet.radius + ship.hit_radius * 0.72:
 			if planet.capture(palette[selected_color_index]):
 				captured_count += 1
-				_play_sfx("capture", 0.94 + float(captured_count) * 0.012, -5.0)
+				_speak_target_name(planet.body_name)
 				if captured_count >= total_targets:
 					_finish_run()
 
@@ -417,6 +419,7 @@ func _show_results() -> void:
 
 
 func _return_to_menu() -> void:
+	_stop_target_speech()
 	_play_sfx("click", 0.92, -5.0)
 	_clear_planets()
 	state = GameState.MENU
@@ -642,6 +645,28 @@ func _play_sfx(effect: String, pitch := 1.0, volume_db := 0.0) -> void:
 	add_child(player)
 	player.finished.connect(player.queue_free)
 	player.play()
+
+
+func _setup_tts() -> void:
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
+		return
+	var voices := DisplayServer.tts_get_voices_for_language("en")
+	if voices.is_empty():
+		voices = DisplayServer.tts_get_voices_for_language("en-US")
+	if not voices.is_empty():
+		tts_voice = String(voices[0])
+
+
+func _speak_target_name(target_name: String) -> void:
+	if tts_voice.is_empty():
+		return
+	# Queue names so rapid captures remain intelligible instead of talking over one another.
+	DisplayServer.tts_speak(target_name, tts_voice, 55, 1.0, 1.08, captured_count, false)
+
+
+func _stop_target_speech() -> void:
+	if not tts_voice.is_empty():
+		DisplayServer.tts_stop()
 
 
 func _make_shout_stream() -> AudioStreamWAV:
