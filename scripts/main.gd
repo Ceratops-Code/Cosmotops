@@ -41,10 +41,17 @@ var state := GameState.MENU
 var state_before_pause := GameState.PLAYING
 var palette := [
 	Color("41f4c6"), Color("46a8ff"), Color("ff4e9c"),
-	Color("ffc857"), Color("a879ff"), Color("76ed55")
+	Color("ffc857"), Color("a879ff"), Color("76ed55"),
+	Color("ff4a55"), Color("ff8a3d"), Color("edf7ff"), Color("20d9ff")
 ]
-var color_names := ["Comet Mint", "Orbit Blue", "Nova Pink", "Solar Gold", "Nebula Violet", "Alien Lime"]
-var ship_names := ["Arrow Scout", "Dart Runner", "Nova Wing", "Orbit Saucer"]
+var color_names := [
+	"Comet Mint", "Orbit Blue", "Nova Pink", "Solar Gold", "Nebula Violet",
+	"Alien Lime", "Meteor Red", "Rocket Orange", "Starlight White", "Plasma Cyan",
+]
+var ship_names := [
+	"Arrow Scout", "Dart Runner", "Nova Wing", "Orbit Saucer",
+	"Comet Spear", "Twin Comet", "Star Skimmer", "Rocket Pod",
+]
 var selected_color_index := 0
 var selected_ship_index := 0
 
@@ -59,7 +66,6 @@ var total_targets := 0
 var countdown_value := 5
 var countdown_phase := 0.0
 var finale_impacts := 0
-var capture_flash := 0.0
 var input_hint_time := 0.0
 var run_serial := 0
 
@@ -96,7 +102,6 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	input_hint_time += delta
-	capture_flash = move_toward(capture_flash, 0.0, delta * 2.5)
 	match state:
 		GameState.COUNTDOWN:
 			countdown_phase += delta
@@ -369,7 +374,6 @@ func _check_planet_contacts() -> void:
 		if ship.position.distance_to(planet.position) <= planet.radius + ship.hit_radius * 0.72:
 			if planet.capture(palette[selected_color_index]):
 				captured_count += 1
-				capture_flash = 1.0
 				_play_sfx("capture", 0.94 + float(captured_count) * 0.012, -5.0)
 				if captured_count >= total_targets:
 					_finish_run()
@@ -401,7 +405,6 @@ func _on_meteor_impact(planet: Node) -> void:
 	if is_instance_valid(planet):
 		planet.explode()
 	finale_impacts += 1
-	capture_flash = 1.0
 	_play_sfx("explosion", 0.88 + float(finale_impacts % 5) * 0.055, -4.0)
 	if finale_impacts >= total_targets:
 		get_tree().create_timer(1.05).timeout.connect(_show_results)
@@ -755,8 +758,6 @@ func _draw_game_hud() -> void:
 	var can_pause := state in [GameState.COUNTDOWN, GameState.PLAYING, GameState.PAUSED]
 	_button(PAUSE_BUTTON, "RESUME" if state == GameState.PAUSED else "PAUSE", palette[selected_color_index], can_pause)
 	_button(CLOSE_BUTTON, "CLOSE", Color("ff657a"))
-	if capture_flash > 0.0:
-		draw_rect(Rect2(0.0, 79.0, VIEW_SIZE.x * capture_flash, 3.0), palette[selected_color_index], true)
 
 
 func _draw_touch_stick() -> void:

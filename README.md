@@ -1,8 +1,8 @@
 # Cosmotops
 
 Cosmotops is a fast top-down arcade prototype starring Trixie. Choose one of
-four ships and a paint color, then fly through the Sun, eight planets, Moon,
-Makemake, a black hole, and two asteroids before the meteor finale.
+eight ships and ten paint colors, then fly through the Sun, eight planets,
+Moon, Makemake, a black hole, and two asteroids before the meteor finale.
 
 ## Controls
 

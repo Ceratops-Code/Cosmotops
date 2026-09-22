@@ -9,7 +9,15 @@ const SHIP_TEXTURES := [
 	preload("res://assets/ship_nova.png"),
 	preload("res://assets/ship_saucer.png"),
 ]
-const COCKPIT_OFFSETS := [Vector2(0.0, -4.0), Vector2(0.0, -4.0), Vector2(0.0, 2.0), Vector2.ZERO]
+const SHIP_STYLE_COUNT := 8
+const COCKPIT_OFFSETS := [
+	Vector2(0.0, -4.0), Vector2(0.0, -4.0), Vector2(0.0, 2.0), Vector2.ZERO,
+	Vector2(0.0, -7.0), Vector2(0.0, -3.0), Vector2(0.0, -5.0), Vector2(0.0, -8.0),
+]
+const COCKPIT_RADII := [13.0, 13.0, 13.0, 15.0, 13.0, 13.0, 13.0, 12.0]
+const PROCEDURAL_SIZES := [
+	Vector2(68.0, 78.0), Vector2(82.0, 76.0), Vector2(92.0, 72.0), Vector2(64.0, 82.0),
+]
 
 var ship_color := Color("41f4c6")
 var ship_style := 0
@@ -26,7 +34,7 @@ var trixie_texture: Texture2D = preload("res://assets/trixie.png")
 func configure(color: Color, bounds: Rect2, style_index := 0) -> void:
 	ship_color = color
 	movement_bounds = bounds
-	ship_style = clampi(style_index, 0, SHIP_TEXTURES.size() - 1)
+	ship_style = clampi(style_index, 0, SHIP_STYLE_COUNT - 1)
 	queue_redraw()
 
 
@@ -51,34 +59,21 @@ func stop() -> void:
 
 
 func _draw() -> void:
-	var texture: Texture2D = SHIP_TEXTURES[ship_style]
-	var source_size := texture.get_size()
-	var target_height := 78.0 if ship_style == 3 else 76.0
-	var target_size := source_size * (target_height / source_size.y)
-	var target_rect := Rect2(-target_size * 0.5, target_size)
-
-	var flame_wave := 4.0 + sin(Time.get_ticks_msec() * 0.022) * 3.0
-	if thrust_amount > 0.08:
-		var flame_length := 18.0 + flame_wave * thrust_amount
-		var flame_width := 8.0 if ship_style == 3 else 11.0
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(-flame_width, target_size.y * 0.40),
-			Vector2(0.0, target_size.y * 0.40 + flame_length),
-			Vector2(flame_width, target_size.y * 0.40),
-		]), Color("ff873b"))
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(-flame_width * 0.45, target_size.y * 0.39),
-			Vector2(0.0, target_size.y * 0.38 + flame_length * 0.62),
-			Vector2(flame_width * 0.45, target_size.y * 0.39),
-		]), Color("fff4a4"))
-
-	# The selected paint color remains readable without recoloring Kenney's detailed sprite art.
+	var target_size := _ship_target_size()
+	_draw_thruster_flames(target_size)
 	draw_circle(Vector2.ZERO, maxf(target_size.x, target_size.y) * 0.48, Color(ship_color, 0.12))
-	draw_texture_rect(texture, Rect2(target_rect.position + Vector2(4.0, 6.0), target_rect.size), false, Color(0.0, 0.0, 0.05, 0.62))
-	draw_texture_rect(texture, target_rect, false, Color.WHITE)
+
+	if ship_style < SHIP_TEXTURES.size():
+		var texture: Texture2D = SHIP_TEXTURES[ship_style]
+		var target_rect := Rect2(-target_size * 0.5, target_size)
+		# Paint remains readable without flattening the detail in Kenney's sprite art.
+		draw_texture_rect(texture, Rect2(target_rect.position + Vector2(4.0, 6.0), target_rect.size), false, Color(0.0, 0.0, 0.05, 0.62))
+		draw_texture_rect(texture, target_rect, false, Color.WHITE)
+	else:
+		_draw_procedural_ship()
 
 	var cockpit: Vector2 = COCKPIT_OFFSETS[ship_style]
-	var cockpit_radius := 15.0 if ship_style == 3 else 13.0
+	var cockpit_radius: float = COCKPIT_RADII[ship_style]
 	draw_circle(cockpit, cockpit_radius + 3.5, Color(0.01, 0.02, 0.09, 0.92))
 	draw_circle(cockpit, cockpit_radius + 1.5, ship_color)
 	draw_circle(cockpit, cockpit_radius, Color("79d9ff"))
@@ -90,3 +85,118 @@ func _draw() -> void:
 	)
 	draw_arc(cockpit, cockpit_radius + 1.0, PI, TAU, 24, Color(1.0, 1.0, 1.0, 0.72), 2.2, true)
 	draw_arc(Vector2.ZERO, maxf(target_size.x, target_size.y) * 0.48, -0.15, PI + 0.15, 38, Color(ship_color, 0.76), 2.0, true)
+
+
+func _ship_target_size() -> Vector2:
+	if ship_style >= SHIP_TEXTURES.size():
+		return PROCEDURAL_SIZES[ship_style - SHIP_TEXTURES.size()]
+	var texture: Texture2D = SHIP_TEXTURES[ship_style]
+	var source_size := texture.get_size()
+	var target_height := 78.0 if ship_style == 3 else 76.0
+	return source_size * (target_height / source_size.y)
+
+
+func _draw_thruster_flames(target_size: Vector2) -> void:
+	if thrust_amount <= 0.08:
+		return
+	var flame_wave := 4.0 + sin(Time.get_ticks_msec() * 0.022) * 3.0
+	var flame_length := 18.0 + flame_wave * thrust_amount
+	var flame_y := target_size.y * 0.40
+	if ship_style == 5:
+		_draw_flame(Vector2(-22.0, flame_y), 6.0, flame_length * 0.88)
+		_draw_flame(Vector2(22.0, flame_y), 6.0, flame_length * 0.88)
+	elif ship_style == 6:
+		_draw_flame(Vector2(-15.0, flame_y), 7.0, flame_length * 0.82)
+		_draw_flame(Vector2(15.0, flame_y), 7.0, flame_length * 0.82)
+	else:
+		_draw_flame(Vector2(0.0, flame_y), 8.0 if ship_style in [3, 7] else 11.0, flame_length)
+
+
+func _draw_flame(origin: Vector2, width: float, length: float) -> void:
+	draw_colored_polygon(PackedVector2Array([
+		origin + Vector2(-width, 0.0), origin + Vector2(0.0, length), origin + Vector2(width, 0.0),
+	]), Color("ff873b"))
+	draw_colored_polygon(PackedVector2Array([
+		origin + Vector2(-width * 0.45, -1.0),
+		origin + Vector2(0.0, length * 0.62),
+		origin + Vector2(width * 0.45, -1.0),
+	]), Color("fff4a4"))
+
+
+func _draw_procedural_ship() -> void:
+	match ship_style:
+		4: _draw_comet_spear()
+		5: _draw_twin_comet()
+		6: _draw_star_skimmer()
+		7: _draw_rocket_pod()
+
+
+func _draw_comet_spear() -> void:
+	var hull := PackedVector2Array([
+		Vector2(0.0, -40.0), Vector2(-13.0, -13.0), Vector2(-25.0, 28.0),
+		Vector2(-7.0, 21.0), Vector2(0.0, 38.0), Vector2(7.0, 21.0),
+		Vector2(25.0, 28.0), Vector2(13.0, -13.0),
+	])
+	_draw_ship_polygon(hull, ship_color)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-10.0, -9.0), Vector2(-30.0, 23.0), Vector2(-9.0, 14.0),
+	]), ship_color.darkened(0.28))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(10.0, -9.0), Vector2(30.0, 23.0), Vector2(9.0, 14.0),
+	]), ship_color.darkened(0.18))
+	draw_line(Vector2(0.0, -34.0), Vector2(0.0, 31.0), ship_color.lightened(0.42), 3.0, true)
+
+
+func _draw_twin_comet() -> void:
+	var left_pod := PackedVector2Array([
+		Vector2(-22.0, -34.0), Vector2(-33.0, -12.0), Vector2(-30.0, 31.0),
+		Vector2(-17.0, 38.0), Vector2(-12.0, -7.0),
+	])
+	var right_pod := PackedVector2Array([
+		Vector2(22.0, -34.0), Vector2(33.0, -12.0), Vector2(30.0, 31.0),
+		Vector2(17.0, 38.0), Vector2(12.0, -7.0),
+	])
+	_draw_ship_polygon(left_pod, ship_color.darkened(0.12))
+	_draw_ship_polygon(right_pod, ship_color)
+	_draw_ship_polygon(PackedVector2Array([
+		Vector2(0.0, -30.0), Vector2(-17.0, 4.0), Vector2(0.0, 29.0), Vector2(17.0, 4.0),
+	]), ship_color.lightened(0.16))
+	draw_line(Vector2(-19.0, 11.0), Vector2(19.0, 11.0), Color(1.0, 1.0, 1.0, 0.55), 3.0, true)
+
+
+func _draw_star_skimmer() -> void:
+	var wing := PackedVector2Array([
+		Vector2(0.0, -36.0), Vector2(-16.0, -12.0), Vector2(-44.0, 7.0),
+		Vector2(-25.0, 17.0), Vector2(-32.0, 31.0), Vector2(0.0, 20.0),
+		Vector2(32.0, 31.0), Vector2(25.0, 17.0), Vector2(44.0, 7.0), Vector2(16.0, -12.0),
+	])
+	_draw_ship_polygon(wing, ship_color)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(0.0, -28.0), Vector2(-26.0, 10.0), Vector2(0.0, 14.0), Vector2(26.0, 10.0),
+	]), ship_color.darkened(0.30))
+	draw_line(Vector2(-36.0, 9.0), Vector2(-10.0, 3.0), ship_color.lightened(0.45), 3.0, true)
+	draw_line(Vector2(36.0, 9.0), Vector2(10.0, 3.0), ship_color.lightened(0.45), 3.0, true)
+
+
+func _draw_rocket_pod() -> void:
+	var hull := PackedVector2Array([
+		Vector2(0.0, -42.0), Vector2(-16.0, -18.0), Vector2(-17.0, 25.0),
+		Vector2(-10.0, 37.0), Vector2(10.0, 37.0), Vector2(17.0, 25.0), Vector2(16.0, -18.0),
+	])
+	_draw_ship_polygon(hull, ship_color)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-15.0, 10.0), Vector2(-31.0, 31.0), Vector2(-13.0, 27.0),
+	]), ship_color.darkened(0.24))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(15.0, 10.0), Vector2(31.0, 31.0), Vector2(13.0, 27.0),
+	]), ship_color.darkened(0.16))
+	draw_line(Vector2(-11.0, -15.0), Vector2(-11.0, 23.0), ship_color.lightened(0.38), 3.0, true)
+	draw_line(Vector2(11.0, -15.0), Vector2(11.0, 23.0), ship_color.darkened(0.22), 3.0, true)
+
+
+func _draw_ship_polygon(points: PackedVector2Array, color: Color) -> void:
+	var shadow := PackedVector2Array()
+	for point in points:
+		shadow.append(point + Vector2(4.0, 6.0))
+	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.05, 0.70))
+	draw_colored_polygon(points, color)
