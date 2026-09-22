@@ -17,6 +17,8 @@ const SFX_STREAMS := {
 const VIEW_SIZE := Vector2(1280.0, 720.0)
 const SHIP_BOUNDS := Rect2(35.0, 92.0, 1210.0, 590.0)
 const SHIP_START := Vector2(640.0, 390.0)
+const SHOUT_SAMPLE_RATE := 22050
+const SHOUT_DURATION := 1.15
 
 const BACK_BUTTON := Rect2(704.0, 16.0, 128.0, 50.0)
 const RESET_BUTTON := Rect2(840.0, 16.0, 128.0, 50.0)
@@ -72,10 +74,12 @@ var overlay_layer: CanvasLayer
 var overlay_shade: ColorRect
 var message_label: Label
 var countdown_label: Label
+var shout_stream: AudioStreamWAV
 
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
+	shout_stream = _make_shout_stream()
 	_make_stars()
 	_load_best_time()
 	_setup_overlay()
@@ -211,6 +215,7 @@ func _save_best_time() -> void:
 func _body_specs() -> Array[Dictionary]:
 	# Radii deliberately compress the real scale while preserving the recognizable hierarchy.
 	return [
+		{"name": "Sun", "radius": 60.0, "style": "sun"},
 		{"name": "Jupiter", "radius": 54.0, "style": "jupiter"},
 		{"name": "Saturn", "radius": 46.0, "style": "saturn"},
 		{"name": "Uranus", "radius": 38.0, "style": "uranus"},
@@ -277,16 +282,18 @@ func _random_target_positions(specs: Array[Dictionary], rng: RandomNumberGenerat
 			return positions
 	# This irregular layout is reachable only if every randomized packing attempt fails.
 	return [
-		Vector2(150.0, 190.0), Vector2(1010.0, 590.0), Vector2(1130.0, 230.0),
-		Vector2(210.0, 550.0), Vector2(930.0, 170.0), Vector2(390.0, 250.0),
-		Vector2(1120.0, 430.0), Vector2(500.0, 590.0), Vector2(760.0, 185.0),
-		Vector2(315.0, 465.0), Vector2(760.0, 585.0), Vector2(510.0, 145.0),
+		Vector2(150.0, 190.0), Vector2(1010.0, 590.0), Vector2(1110.0, 210.0),
+		Vector2(210.0, 550.0), Vector2(920.0, 180.0), Vector2(390.0, 250.0),
+		Vector2(1120.0, 430.0), Vector2(500.0, 590.0), Vector2(740.0, 180.0),
+		Vector2(320.0, 460.0), Vector2(780.0, 585.0), Vector2(520.0, 145.0),
+		Vector2(680.0, 420.0),
 	]
 
 
 func _layout_extent(spec: Dictionary) -> float:
 	var radius := float(spec["radius"])
 	match String(spec["style"]):
+		"sun": return radius * 1.22
 		"saturn": return radius * 1.75
 		"uranus": return radius * 1.38
 		"makemake": return radius * 1.30
@@ -387,6 +394,8 @@ func _finish_run() -> void:
 
 
 func _on_meteor_impact(planet: Node) -> void:
+	if finale_impacts == 0:
+		_play_shout()
 	if is_instance_valid(planet):
 		planet.explode()
 	finale_impacts += 1
@@ -625,6 +634,45 @@ func _play_sfx(effect: String, pitch := 1.0, volume_db := 0.0) -> void:
 	player.stream = SFX_STREAMS[effect]
 	player.pitch_scale = pitch
 	player.volume_db = volume_db
+	add_child(player)
+	player.finished.connect(player.queue_free)
+	player.play()
+
+
+func _make_shout_stream() -> AudioStreamWAV:
+	# Build a short vowel-like shout in memory so every platform hears the same finale cue.
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = SHOUT_SAMPLE_RATE
+	stream.stereo = false
+	var sample_count := int(SHOUT_DURATION * float(SHOUT_SAMPLE_RATE))
+	var samples := PackedByteArray()
+	samples.resize(sample_count * 2)
+	var phase := 0.0
+	for index in range(sample_count):
+		var time := float(index) / float(SHOUT_SAMPLE_RATE)
+		var progress := time / SHOUT_DURATION
+		var attack := clampf(time / 0.055, 0.0, 1.0)
+		var release := clampf((SHOUT_DURATION - time) / 0.24, 0.0, 1.0)
+		var pitch := lerpf(174.0, 132.0, progress) + sin(time * TAU * 2.2) * 3.5
+		phase += TAU * pitch / float(SHOUT_SAMPLE_RATE)
+		var voice := sin(phase) * 0.58 + sin(phase * 2.0) * 0.20 + sin(phase * 3.0) * 0.10
+		var formants := sin(time * TAU * 720.0) * 0.075 + sin(time * TAU * 1120.0) * 0.045
+		var tremolo := 0.91 + sin(time * TAU * 5.2) * 0.09
+		var value := clampf((voice + formants) * attack * release * tremolo * 0.52, -1.0, 1.0)
+		var pcm := int(round(value * 32767.0))
+		samples[index * 2] = pcm & 0xff
+		samples[index * 2 + 1] = (pcm >> 8) & 0xff
+	stream.data = samples
+	return stream
+
+
+func _play_shout() -> void:
+	if shout_stream == null:
+		return
+	var player := AudioStreamPlayer.new()
+	player.stream = shout_stream
+	player.volume_db = -11.0
 	add_child(player)
 	player.finished.connect(player.queue_free)
 	player.play()

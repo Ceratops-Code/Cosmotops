@@ -30,6 +30,9 @@ func configure(new_name: String, new_radius: float, new_style: String, new_seed:
 	body_style = new_style
 	seed = new_seed
 	match body_style:
+		"sun":
+			base_color = Color("ffb21c")
+			accent_color = Color("fff2a1")
 		"mercury":
 			base_color = Color("8e8b86")
 			accent_color = Color("c8c1b8")
@@ -164,7 +167,9 @@ func _draw() -> void:
 	if ringed:
 		_draw_ring(color, false)
 
-	if body_style.begins_with("asteroid"):
+	if body_style == "sun":
+		_draw_sun(color)
+	elif body_style.begins_with("asteroid"):
 		_draw_asteroid(color)
 	elif body_style == "makemake":
 		_draw_makemake(color)
@@ -204,6 +209,25 @@ func _draw_round_world(color: Color) -> void:
 			_draw_neptune_features()
 
 	draw_circle(Vector2(-radius * 0.29, -radius * 0.34), radius * 0.28, Color(1.0, 1.0, 1.0, 0.12))
+
+
+func _draw_sun(color: Color) -> void:
+	var glow_color := color.lightened(0.24)
+	draw_circle(Vector2.ZERO, radius + 19.0, Color(glow_color, 0.07))
+	draw_circle(Vector2.ZERO, radius + 11.0, Color(glow_color, 0.15))
+	for index in range(16):
+		var angle := TAU * float(index) / 16.0 + pulse_time * 0.08
+		var ray_start := Vector2.from_angle(angle) * (radius + 5.0)
+		var ray_length := radius + 14.0 + sin(pulse_time * 2.4 + float(index)) * 3.0
+		draw_line(ray_start, Vector2.from_angle(angle) * ray_length, Color(glow_color, 0.76), 3.0, true)
+	draw_circle(Vector2(4.0, 7.0), radius + 2.0, Color(0.20, 0.05, 0.0, 0.72))
+	draw_circle(Vector2.ZERO, radius, color.darkened(0.10))
+	draw_circle(Vector2(-radius * 0.06, -radius * 0.07), radius * 0.94, color)
+	for index in range(7):
+		var spot_angle := TAU * float(index) / 7.0 + float(seed % 13) * 0.09
+		var spot_position := Vector2.from_angle(spot_angle) * radius * (0.22 + float(index % 3) * 0.13)
+		draw_circle(spot_position, radius * (0.055 + float(index % 2) * 0.025), _surface_color(accent_color, 0.18))
+	draw_circle(Vector2(-radius * 0.28, -radius * 0.33), radius * 0.25, Color(1.0, 1.0, 1.0, 0.16))
 
 
 func _draw_band(y: float, thickness: float, color: Color) -> void:
@@ -293,6 +317,8 @@ func _draw_asteroid(color: Color) -> void:
 
 func _draw_label() -> void:
 	var half_height := radius
+	if body_style == "sun":
+		half_height = radius + 20.0
 	if ringed:
 		half_height = maxf(half_height, absf(ring_rx * sin(ring_angle)) + absf(ring_ry * cos(ring_angle)))
 	var label_y := half_height + 18.0
