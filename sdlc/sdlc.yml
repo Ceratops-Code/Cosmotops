@@ -95,6 +95,10 @@ deliverables:
                 - build/android/Cosmotops.apk
             - run:
                 - "{adb_executable}"
+                - connect
+                - "{device}"
+            - run:
+                - "{adb_executable}"
                 - -s
                 - "{device}"
                 - install
