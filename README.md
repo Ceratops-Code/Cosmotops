@@ -19,4 +19,6 @@ Trixie's source artwork is stored in `assets/trixie.png`; the ship, planets, met
 - Windows: `build/windows/Cosmotops.exe`
 - Android: `build/android/Cosmotops.apk`
 
+Install Godot's Android build template from **Project > Install Android Build Template** before exporting Android. Cosmotops uses the Gradle exporter so Android's themed launcher icon is packaged correctly.
+
 The APK is a debug-signed ARM64 prototype intended for direct testing, not a Play Store release.
