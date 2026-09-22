@@ -9,7 +9,6 @@ const SFX_STREAMS := {
 	"click": preload("res://assets/sfx_click.ogg"),
 	"countdown": preload("res://assets/sfx_countdown.ogg"),
 	"start": preload("res://assets/sfx_start.ogg"),
-	"capture": preload("res://assets/sfx_capture.ogg"),
 	"meteor": preload("res://assets/sfx_meteor.ogg"),
 	"explosion": preload("res://assets/sfx_explosion.ogg"),
 }
@@ -17,6 +16,8 @@ const SFX_STREAMS := {
 const VIEW_SIZE := Vector2(1280.0, 720.0)
 const SHIP_BOUNDS := Rect2(35.0, 92.0, 1210.0, 590.0)
 const SHIP_START := Vector2(640.0, 390.0)
+const SHOUT_SAMPLE_RATE := 22050
+const SHOUT_DURATION := 1.15
 
 const BACK_BUTTON := Rect2(704.0, 16.0, 128.0, 50.0)
 const RESET_BUTTON := Rect2(840.0, 16.0, 128.0, 50.0)
@@ -39,10 +40,17 @@ var state := GameState.MENU
 var state_before_pause := GameState.PLAYING
 var palette := [
 	Color("41f4c6"), Color("46a8ff"), Color("ff4e9c"),
-	Color("ffc857"), Color("a879ff"), Color("76ed55")
+	Color("ffc857"), Color("a879ff"), Color("76ed55"),
+	Color("ff4a55"), Color("ff8a3d"), Color("edf7ff"), Color("20d9ff")
 ]
-var color_names := ["Comet Mint", "Orbit Blue", "Nova Pink", "Solar Gold", "Nebula Violet", "Alien Lime"]
-var ship_names := ["Arrow Scout", "Dart Runner", "Nova Wing", "Orbit Saucer"]
+var color_names := [
+	"Comet Mint", "Orbit Blue", "Nova Pink", "Solar Gold", "Nebula Violet",
+	"Alien Lime", "Meteor Red", "Rocket Orange", "Starlight White", "Plasma Cyan",
+]
+var ship_names := [
+	"Arrow Scout", "Dart Runner", "Nova Wing", "Orbit Saucer",
+	"Comet Spear", "Twin Comet", "Star Skimmer", "Rocket Pod",
+]
 var selected_color_index := 0
 var selected_ship_index := 0
 
@@ -57,7 +65,6 @@ var total_targets := 0
 var countdown_value := 5
 var countdown_phase := 0.0
 var finale_impacts := 0
-var capture_flash := 0.0
 var input_hint_time := 0.0
 var run_serial := 0
 
@@ -72,10 +79,14 @@ var overlay_layer: CanvasLayer
 var overlay_shade: ColorRect
 var message_label: Label
 var countdown_label: Label
+var shout_stream: AudioStreamWAV
+var tts_voice := ""
 
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
+	shout_stream = _make_shout_stream()
+	_setup_tts()
 	_make_stars()
 	_load_best_time()
 	_setup_overlay()
@@ -92,7 +103,6 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	input_hint_time += delta
-	capture_flash = move_toward(capture_flash, 0.0, delta * 2.5)
 	match state:
 		GameState.COUNTDOWN:
 			countdown_phase += delta
@@ -211,6 +221,8 @@ func _save_best_time() -> void:
 func _body_specs() -> Array[Dictionary]:
 	# Radii deliberately compress the real scale while preserving the recognizable hierarchy.
 	return [
+		{"name": "Sun", "radius": 60.0, "style": "sun"},
+		{"name": "Black Hole", "radius": 30.0, "style": "black_hole"},
 		{"name": "Jupiter", "radius": 54.0, "style": "jupiter"},
 		{"name": "Saturn", "radius": 46.0, "style": "saturn"},
 		{"name": "Uranus", "radius": 38.0, "style": "uranus"},
@@ -277,16 +289,19 @@ func _random_target_positions(specs: Array[Dictionary], rng: RandomNumberGenerat
 			return positions
 	# This irregular layout is reachable only if every randomized packing attempt fails.
 	return [
-		Vector2(150.0, 190.0), Vector2(1010.0, 590.0), Vector2(1130.0, 230.0),
-		Vector2(210.0, 550.0), Vector2(930.0, 170.0), Vector2(390.0, 250.0),
-		Vector2(1120.0, 430.0), Vector2(500.0, 590.0), Vector2(760.0, 185.0),
-		Vector2(315.0, 465.0), Vector2(760.0, 585.0), Vector2(510.0, 145.0),
+		Vector2(150.0, 190.0), Vector2(1080.0, 180.0), Vector2(1020.0, 580.0),
+		Vector2(220.0, 560.0), Vector2(780.0, 170.0), Vector2(430.0, 180.0),
+		Vector2(1120.0, 390.0), Vector2(500.0, 580.0), Vector2(880.0, 560.0),
+		Vector2(330.0, 400.0), Vector2(820.0, 390.0), Vector2(500.0, 360.0),
+		Vector2(670.0, 590.0), Vector2(650.0, 140.0),
 	]
 
 
 func _layout_extent(spec: Dictionary) -> float:
 	var radius := float(spec["radius"])
 	match String(spec["style"]):
+		"sun": return radius * 1.22
+		"black_hole": return radius * 2.25
 		"saturn": return radius * 1.75
 		"uranus": return radius * 1.38
 		"makemake": return radius * 1.30
@@ -304,6 +319,7 @@ func _clear_planets() -> void:
 
 
 func _prepare_run() -> void:
+	_stop_target_speech()
 	_spawn_planets()
 	captured_count = 0
 	elapsed_time = 0.0
@@ -360,8 +376,7 @@ func _check_planet_contacts() -> void:
 		if ship.position.distance_to(planet.position) <= planet.radius + ship.hit_radius * 0.72:
 			if planet.capture(palette[selected_color_index]):
 				captured_count += 1
-				capture_flash = 1.0
-				_play_sfx("capture", 0.94 + float(captured_count) * 0.012, -5.0)
+				_speak_target_name(planet.body_name)
 				if captured_count >= total_targets:
 					_finish_run()
 
@@ -387,10 +402,11 @@ func _finish_run() -> void:
 
 
 func _on_meteor_impact(planet: Node) -> void:
+	if finale_impacts == 0:
+		_play_shout()
 	if is_instance_valid(planet):
 		planet.explode()
 	finale_impacts += 1
-	capture_flash = 1.0
 	_play_sfx("explosion", 0.88 + float(finale_impacts % 5) * 0.055, -4.0)
 	if finale_impacts >= total_targets:
 		get_tree().create_timer(1.05).timeout.connect(_show_results)
@@ -403,6 +419,7 @@ func _show_results() -> void:
 
 
 func _return_to_menu() -> void:
+	_stop_target_speech()
 	_play_sfx("click", 0.92, -5.0)
 	_clear_planets()
 	state = GameState.MENU
@@ -630,6 +647,67 @@ func _play_sfx(effect: String, pitch := 1.0, volume_db := 0.0) -> void:
 	player.play()
 
 
+func _setup_tts() -> void:
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH):
+		return
+	var voices := DisplayServer.tts_get_voices_for_language("en")
+	if voices.is_empty():
+		voices = DisplayServer.tts_get_voices_for_language("en-US")
+	if not voices.is_empty():
+		tts_voice = String(voices[0])
+
+
+func _speak_target_name(target_name: String) -> void:
+	if tts_voice.is_empty():
+		return
+	# Queue names so rapid captures remain intelligible instead of talking over one another.
+	DisplayServer.tts_speak(target_name, tts_voice, 55, 1.0, 1.08, captured_count, false)
+
+
+func _stop_target_speech() -> void:
+	if not tts_voice.is_empty():
+		DisplayServer.tts_stop()
+
+
+func _make_shout_stream() -> AudioStreamWAV:
+	# Build a short vowel-like shout in memory so every platform hears the same finale cue.
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = SHOUT_SAMPLE_RATE
+	stream.stereo = false
+	var sample_count := int(SHOUT_DURATION * float(SHOUT_SAMPLE_RATE))
+	var samples := PackedByteArray()
+	samples.resize(sample_count * 2)
+	var phase := 0.0
+	for index in range(sample_count):
+		var time := float(index) / float(SHOUT_SAMPLE_RATE)
+		var progress := time / SHOUT_DURATION
+		var attack := clampf(time / 0.055, 0.0, 1.0)
+		var release := clampf((SHOUT_DURATION - time) / 0.24, 0.0, 1.0)
+		var pitch := lerpf(174.0, 132.0, progress) + sin(time * TAU * 2.2) * 3.5
+		phase += TAU * pitch / float(SHOUT_SAMPLE_RATE)
+		var voice := sin(phase) * 0.58 + sin(phase * 2.0) * 0.20 + sin(phase * 3.0) * 0.10
+		var formants := sin(time * TAU * 720.0) * 0.075 + sin(time * TAU * 1120.0) * 0.045
+		var tremolo := 0.91 + sin(time * TAU * 5.2) * 0.09
+		var value := clampf((voice + formants) * attack * release * tremolo * 0.52, -1.0, 1.0)
+		var pcm := int(round(value * 32767.0))
+		samples[index * 2] = pcm & 0xff
+		samples[index * 2 + 1] = (pcm >> 8) & 0xff
+	stream.data = samples
+	return stream
+
+
+func _play_shout() -> void:
+	if shout_stream == null:
+		return
+	var player := AudioStreamPlayer.new()
+	player.stream = shout_stream
+	player.volume_db = -11.0
+	add_child(player)
+	player.finished.connect(player.queue_free)
+	player.play()
+
+
 func _format_time(value: float) -> String:
 	var minutes := int(floor(value / 60.0))
 	var seconds := fmod(value, 60.0)
@@ -705,8 +783,6 @@ func _draw_game_hud() -> void:
 	var can_pause := state in [GameState.COUNTDOWN, GameState.PLAYING, GameState.PAUSED]
 	_button(PAUSE_BUTTON, "RESUME" if state == GameState.PAUSED else "PAUSE", palette[selected_color_index], can_pause)
 	_button(CLOSE_BUTTON, "CLOSE", Color("ff657a"))
-	if capture_flash > 0.0:
-		draw_rect(Rect2(0.0, 79.0, VIEW_SIZE.x * capture_flash, 3.0), palette[selected_color_index], true)
 
 
 func _draw_touch_stick() -> void:

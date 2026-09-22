@@ -1,8 +1,8 @@
 # Cosmotops
 
 Cosmotops is a fast top-down arcade prototype starring Trixie. Choose one of
-four ships and a paint color, then fly through the eight planets, Moon,
-Makemake, and two asteroids before the meteor finale.
+eight ships and ten paint colors, then fly through the Sun, eight planets,
+Moon, Makemake, a black hole, and two asteroids before the meteor finale.
 
 ## Controls
 
@@ -12,7 +12,8 @@ Makemake, and two asteroids before the meteor finale.
 
 Choose **Ready Ship**, then press any keyboard key, gamepad button, or tap to
 start the animated `5` to `1` countdown. The in-game header also provides Back,
-Reset, Pause/Resume, and Close buttons.
+Reset, Pause/Resume, and Close buttons. Capturing a target speaks its English
+name through the device's text-to-speech voice.
 
 ## Run locally
 
@@ -20,8 +21,8 @@ Open this folder in Godot 4.7.2 and run the project. The prototype uses Godot's
 GL Compatibility renderer so it can later target Android with the same project.
 
 Trixie's source artwork is stored in `assets/trixie.png`. Ship sprites and sound
-effects are CC0 assets from Kenney; planets, meteors, starfield, and visual
-effects are drawn procedurally at runtime.
+effects are CC0 assets from Kenney; planets, the black hole, meteors, starfield,
+and visual effects are drawn procedurally at runtime.
 
 ## Prototype builds
 

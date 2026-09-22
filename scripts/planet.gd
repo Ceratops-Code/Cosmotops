@@ -30,6 +30,12 @@ func configure(new_name: String, new_radius: float, new_style: String, new_seed:
 	body_style = new_style
 	seed = new_seed
 	match body_style:
+		"sun":
+			base_color = Color("ffb21c")
+			accent_color = Color("fff2a1")
+		"black_hole":
+			base_color = Color("030509")
+			accent_color = Color("fffdf5")
 		"mercury":
 			base_color = Color("8e8b86")
 			accent_color = Color("c8c1b8")
@@ -102,7 +108,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	pulse_time += delta
-	if captured or exploding:
+	if captured or exploding or body_style == "black_hole":
 		queue_redraw()
 
 
@@ -164,7 +170,11 @@ func _draw() -> void:
 	if ringed:
 		_draw_ring(color, false)
 
-	if body_style.begins_with("asteroid"):
+	if body_style == "black_hole":
+		_draw_black_hole()
+	elif body_style == "sun":
+		_draw_sun(color)
+	elif body_style.begins_with("asteroid"):
 		_draw_asteroid(color)
 	elif body_style == "makemake":
 		_draw_makemake(color)
@@ -204,6 +214,63 @@ func _draw_round_world(color: Color) -> void:
 			_draw_neptune_features()
 
 	draw_circle(Vector2(-radius * 0.29, -radius * 0.34), radius * 0.28, Color(1.0, 1.0, 1.0, 0.12))
+
+
+func _draw_sun(color: Color) -> void:
+	var glow_color := color.lightened(0.24)
+	draw_circle(Vector2.ZERO, radius + 19.0, Color(glow_color, 0.07))
+	draw_circle(Vector2.ZERO, radius + 11.0, Color(glow_color, 0.15))
+	for index in range(16):
+		var angle := TAU * float(index) / 16.0 + pulse_time * 0.08
+		var ray_start := Vector2.from_angle(angle) * (radius + 5.0)
+		var ray_length := radius + 14.0 + sin(pulse_time * 2.4 + float(index)) * 3.0
+		draw_line(ray_start, Vector2.from_angle(angle) * ray_length, Color(glow_color, 0.76), 3.0, true)
+	draw_circle(Vector2(4.0, 7.0), radius + 2.0, Color(0.20, 0.05, 0.0, 0.72))
+	draw_circle(Vector2.ZERO, radius, color.darkened(0.10))
+	draw_circle(Vector2(-radius * 0.06, -radius * 0.07), radius * 0.94, color)
+	for index in range(7):
+		var spot_angle := TAU * float(index) / 7.0 + float(seed % 13) * 0.09
+		var spot_position := Vector2.from_angle(spot_angle) * radius * (0.22 + float(index % 3) * 0.13)
+		draw_circle(spot_position, radius * (0.055 + float(index % 2) * 0.025), _surface_color(accent_color, 0.18))
+	draw_circle(Vector2(-radius * 0.28, -radius * 0.33), radius * 0.25, Color(1.0, 1.0, 1.0, 0.16))
+
+
+func _draw_black_hole() -> void:
+	var shimmer := 0.94 + sin(pulse_time * 1.7) * 0.06
+	var halo_color := accent_color.lerp(Color("f4f8ff"), 0.35)
+	var disk_color := Color("e5a68d").lerp(captured_color.lightened(0.28), capture_progress)
+	var disk_shadow := Color("7a4039").lerp(captured_color.darkened(0.30), capture_progress)
+
+	# Broad, dim lensing rings establish the silhouette before the bright photon halo.
+	var outer_halo := _ellipse_points(radius * 1.28, radius * 1.48, 0.0, TAU, 72)
+	draw_polyline(outer_halo, Color(halo_color, 0.12 * shimmer), 8.0, true)
+	var middle_halo := _ellipse_points(radius * 1.12, radius * 1.30, 0.0, TAU, 72)
+	draw_polyline(middle_halo, Color(halo_color, 0.24 * shimmer), 5.0, true)
+
+	# The far side of the accretion disk sits behind the event horizon.
+	for band in [
+		[radius * 2.12, radius * 0.34, 9.0, Color(disk_shadow, 0.58)],
+		[radius * 1.96, radius * 0.25, 6.0, Color(disk_color, 0.82)],
+		[radius * 1.78, radius * 0.18, 3.0, Color(halo_color, 0.90)],
+	]:
+		var disk := _ellipse_points(float(band[0]), float(band[1]), PI, TAU, 56, -0.025)
+		draw_polyline(disk, band[3], float(band[2]), true)
+
+	# The event horizon remains black so it is identifiable after capture.
+	draw_circle(Vector2(2.0, 4.0), radius * 1.04, Color(0.0, 0.0, 0.0, 0.70))
+	draw_circle(Vector2.ZERO, radius, base_color)
+	var photon_ring := _ellipse_points(radius * 1.02, radius * 1.08, PI, TAU, 44)
+	draw_polyline(photon_ring, Color(halo_color, 0.98 * shimmer), 4.5, true)
+	var lower_lensing := _ellipse_points(radius * 0.92, radius * 1.04, 0.0, PI, 36)
+	draw_polyline(lower_lensing, Color(halo_color, 0.48 * shimmer), 2.5, true)
+
+	# The near side crosses in front, producing the bright horizontal streak in the reference.
+	var front_glow := _ellipse_points(radius * 2.15, radius * 0.31, 0.0, PI, 56, -0.025)
+	draw_polyline(front_glow, Color(disk_shadow, 0.74), 10.0, true)
+	var front_disk := _ellipse_points(radius * 2.02, radius * 0.23, 0.0, PI, 56, -0.025)
+	draw_polyline(front_disk, Color(disk_color, 0.94), 6.0, true)
+	var white_edge := _ellipse_points(radius * 1.88, radius * 0.16, 0.0, PI, 48, -0.025)
+	draw_polyline(white_edge, Color(halo_color, 0.96 * shimmer), 2.5, true)
 
 
 func _draw_band(y: float, thickness: float, color: Color) -> void:
@@ -293,6 +360,10 @@ func _draw_asteroid(color: Color) -> void:
 
 func _draw_label() -> void:
 	var half_height := radius
+	if body_style == "sun":
+		half_height = radius + 20.0
+	elif body_style == "black_hole":
+		half_height = radius * 1.50
 	if ringed:
 		half_height = maxf(half_height, absf(ring_rx * sin(ring_angle)) + absf(ring_ry * cos(ring_angle)))
 	var label_y := half_height + 18.0
