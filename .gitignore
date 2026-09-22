@@ -2,3 +2,5 @@
 android/
 build/
 *.tmp
+/scripts/node_modules/
+/.build/
