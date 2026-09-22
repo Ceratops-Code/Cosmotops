@@ -2,41 +2,101 @@ class_name ColorPlanet
 extends Node2D
 
 
+var body_name := "Planet"
+var body_style := "mercury"
 var radius := 40.0
 var base_color := Color("5f83f2")
+var accent_color := Color("c7d4ef")
 var captured_color := Color("41f4c6")
 var captured := false
 var capture_progress := 0.0
-var ringed := false
-var style := 0
 var seed := 1
 var craters: Array[Dictionary] = []
+var asteroid_points := PackedVector2Array()
 var pulse_time := 0.0
 var exploding := false
 var explosion_progress := 0.0
-var ring_angle := -0.25
+var ringed := false
+var ring_angle := 0.0
+var ring_rx := 0.0
+var ring_ry := 0.0
+var ring_width := 0.0
+var font: Font
 
 
-func configure(new_radius: float, color: Color, has_rings: bool, new_style: int, new_seed: int) -> void:
+func configure(new_name: String, new_radius: float, new_style: String, new_seed: int) -> void:
+	body_name = new_name
 	radius = new_radius
-	base_color = color
-	ringed = has_rings
-	style = new_style
+	body_style = new_style
 	seed = new_seed
+	match body_style:
+		"mercury":
+			base_color = Color("8e8b86")
+			accent_color = Color("c8c1b8")
+		"venus":
+			base_color = Color("d9a441")
+			accent_color = Color("ffe2a0")
+		"earth":
+			base_color = Color("2878d0")
+			accent_color = Color("58b96a")
+		"mars":
+			base_color = Color("c55332")
+			accent_color = Color("6f3328")
+		"jupiter":
+			base_color = Color("d5aa78")
+			accent_color = Color("8f5f43")
+		"saturn":
+			base_color = Color("d9c27a")
+			accent_color = Color("927748")
+			ringed = true
+			ring_angle = -0.23
+			ring_rx = radius * 1.75
+			ring_ry = radius * 0.46
+			ring_width = maxf(7.0, radius * 0.16)
+		"uranus":
+			base_color = Color("80d8df")
+			accent_color = Color("c7fbff")
+			ringed = true
+			ring_angle = 1.19
+			ring_rx = radius * 1.38
+			ring_ry = radius * 0.24
+			ring_width = maxf(3.0, radius * 0.075)
+		"neptune":
+			base_color = Color("3159c8")
+			accent_color = Color("8fb7ff")
+		"moon":
+			base_color = Color("b7b7ae")
+			accent_color = Color("e3e1d8")
+		"makemake":
+			base_color = Color("b86446")
+			accent_color = Color("e4a47c")
+		"asteroid_a", "asteroid_b":
+			base_color = Color("756a67") if body_style == "asteroid_a" else Color("625b68")
+			accent_color = Color("b1a29a")
 
 
 func _ready() -> void:
+	font = ThemeDB.fallback_font
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	ring_angle = rng.randf_range(-0.42, 0.32)
-	var crater_count := 2 + style
+	var crater_count := 0
+	match body_style:
+		"mercury": crater_count = 6
+		"moon": crater_count = 5
+		"mars": crater_count = 2
+		"makemake": crater_count = 2
+		"asteroid_a", "asteroid_b": crater_count = 3
 	for index in range(crater_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var distance := rng.randf_range(radius * 0.12, radius * 0.55)
 		craters.append({
 			"position": Vector2.from_angle(angle) * distance,
-			"radius": rng.randf_range(radius * 0.07, radius * 0.16),
+			"radius": rng.randf_range(maxf(1.2, radius * 0.08), maxf(2.0, radius * 0.18)),
 		})
+	if body_style.begins_with("asteroid"):
+		for index in range(11):
+			var angle := TAU * float(index) / 11.0
+			asteroid_points.append(Vector2.from_angle(angle) * radius * rng.randf_range(0.72, 1.08))
 	queue_redraw()
 
 
@@ -78,13 +138,17 @@ func _set_explosion_progress(value: float) -> void:
 	queue_redraw()
 
 
-func _ellipse_points(rx: float, ry: float, from_angle: float, to_angle: float, steps: int) -> PackedVector2Array:
+func _ellipse_points(rx: float, ry: float, from_angle: float, to_angle: float, steps: int, rotation_angle := 0.0, offset := Vector2.ZERO) -> PackedVector2Array:
 	var points := PackedVector2Array()
 	for index in range(steps + 1):
 		var amount := float(index) / float(steps)
 		var angle := lerpf(from_angle, to_angle, amount)
-		points.append(Vector2(cos(angle) * rx, sin(angle) * ry).rotated(ring_angle))
+		points.append(Vector2(cos(angle) * rx, sin(angle) * ry).rotated(rotation_angle) + offset)
 	return points
+
+
+func _surface_color(original: Color, darkness := 0.28) -> Color:
+	return original.lerp(captured_color.darkened(darkness), capture_progress)
 
 
 func _draw() -> void:
@@ -98,30 +162,143 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, radius + 10.0, Color(captured_color, glow_alpha))
 
 	if ringed:
-		var back_ring := _ellipse_points(radius * 1.62, radius * 0.50, 0.0, TAU, 56)
-		draw_polyline(back_ring, color.lightened(0.42), maxf(5.0, radius * 0.16), true)
-		draw_polyline(back_ring, Color("2d315f"), maxf(1.5, radius * 0.035), true)
+		_draw_ring(color, false)
 
-	draw_circle(Vector2(4.0, 7.0), radius + 2.0, Color(0.0, 0.0, 0.12, 0.75))
+	if body_style.begins_with("asteroid"):
+		_draw_asteroid(color)
+	elif body_style == "makemake":
+		_draw_makemake(color)
+	else:
+		_draw_round_world(color)
+
+	if ringed:
+		_draw_ring(color, true)
+	_draw_label()
+
+
+func _draw_round_world(color: Color) -> void:
+	draw_circle(Vector2(4.0, 7.0), radius + 2.0, Color(0.0, 0.0, 0.12, 0.78))
 	draw_circle(Vector2.ZERO, radius, color.darkened(0.12))
-	draw_circle(Vector2(-radius * 0.10, -radius * 0.10), radius * 0.91, color)
-	draw_circle(Vector2(-radius * 0.27, -radius * 0.31), radius * 0.32, Color(1.0, 1.0, 1.0, 0.11))
+	draw_circle(Vector2(-radius * 0.07, -radius * 0.08), radius * 0.94, color)
 
-	if style % 3 == 1:
-		for stripe in range(3):
-			var stripe_y := -radius * 0.42 + stripe * radius * 0.40
-			draw_arc(Vector2(0.0, stripe_y), radius * (0.78 - absf(stripe_y) / radius * 0.25), 0.20, PI - 0.20, 24, Color(color.darkened(0.22), 0.55), maxf(2.0, radius * 0.07), true)
+	match body_style:
+		"mercury", "moon":
+			_draw_craters(color)
+		"venus":
+			_draw_band(-radius * 0.40, radius * 0.13, _surface_color(accent_color, 0.05))
+			_draw_band(-radius * 0.08, radius * 0.16, _surface_color(Color("f0c46d"), 0.12))
+			_draw_band(radius * 0.28, radius * 0.12, _surface_color(accent_color, 0.08))
+		"earth":
+			_draw_earth_features()
+		"mars":
+			_draw_mars_features(color)
+		"jupiter":
+			_draw_jupiter_features()
+		"saturn":
+			_draw_band(-radius * 0.30, radius * 0.08, _surface_color(Color("f2dda0"), 0.07))
+			_draw_band(radius * 0.02, radius * 0.10, _surface_color(accent_color, 0.16))
+			_draw_band(radius * 0.32, radius * 0.07, _surface_color(Color("b69a61"), 0.20))
+		"uranus":
+			_draw_band(radius * 0.10, radius * 0.055, _surface_color(Color("d5ffff"), 0.04))
+		"neptune":
+			_draw_neptune_features()
 
+	draw_circle(Vector2(-radius * 0.29, -radius * 0.34), radius * 0.28, Color(1.0, 1.0, 1.0, 0.12))
+
+
+func _draw_band(y: float, thickness: float, color: Color) -> void:
+	var half_width := sqrt(maxf(0.0, radius * radius - y * y)) * 0.92
+	draw_line(Vector2(-half_width, y), Vector2(half_width, y), color, maxf(1.0, thickness), true)
+
+
+func _draw_craters(color: Color) -> void:
 	for crater in craters:
 		var crater_position: Vector2 = crater["position"]
 		var crater_radius: float = crater["radius"]
-		draw_circle(crater_position, crater_radius, Color(color.darkened(0.30), 0.72))
-		draw_circle(crater_position + Vector2(-crater_radius * 0.22, -crater_radius * 0.22), crater_radius * 0.64, Color(color.lightened(0.13), 0.35))
+		draw_circle(crater_position, crater_radius, Color(color.darkened(0.34), 0.78))
+		draw_circle(crater_position + Vector2(-crater_radius * 0.22, -crater_radius * 0.22), crater_radius * 0.62, Color(color.lightened(0.20), 0.38))
 
+
+func _draw_earth_features() -> void:
+	var land := _surface_color(accent_color, 0.32)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-radius * 0.62, -radius * 0.24), Vector2(-radius * 0.25, -radius * 0.48),
+		Vector2(-radius * 0.05, -radius * 0.20), Vector2(-radius * 0.22, radius * 0.04),
+		Vector2(-radius * 0.48, radius * 0.10),
+	]), land)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(radius * 0.10, -radius * 0.06), Vector2(radius * 0.52, -radius * 0.22),
+		Vector2(radius * 0.63, radius * 0.02), Vector2(radius * 0.34, radius * 0.17),
+		Vector2(radius * 0.26, radius * 0.54), Vector2(radius * 0.05, radius * 0.30),
+	]), land.darkened(0.05))
+	_draw_band(-radius * 0.02, maxf(1.0, radius * 0.045), Color(1.0, 1.0, 1.0, 0.46))
+
+
+func _draw_mars_features(color: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-radius * 0.55, -radius * 0.10), Vector2(-radius * 0.12, -radius * 0.42),
+		Vector2(radius * 0.34, -radius * 0.12), Vector2(radius * 0.22, radius * 0.26),
+		Vector2(-radius * 0.30, radius * 0.20),
+	]), _surface_color(accent_color, 0.38))
+	draw_circle(Vector2(0.0, -radius * 0.77), radius * 0.17, _surface_color(Color("f4dccb"), 0.08))
+	_draw_craters(color)
+
+
+func _draw_jupiter_features() -> void:
+	var bands := [
+		[-0.58, 0.12, Color("8e6047")], [-0.35, 0.09, Color("f0d7b4")],
+		[-0.10, 0.16, Color("ad7555")], [0.18, 0.10, Color("f2d7ac")],
+		[0.43, 0.13, Color("9b664c")],
+	]
+	for band in bands:
+		_draw_band(radius * float(band[0]), radius * float(band[1]), _surface_color(band[2], 0.22))
+	var spot := _ellipse_points(radius * 0.22, radius * 0.11, 0.0, TAU, 24, 0.0, Vector2(radius * 0.31, radius * 0.20))
+	draw_colored_polygon(spot, _surface_color(Color("b94837"), 0.30))
+
+
+func _draw_neptune_features() -> void:
+	_draw_band(-radius * 0.24, radius * 0.08, _surface_color(accent_color, 0.10))
+	_draw_band(radius * 0.33, radius * 0.06, _surface_color(Color("6e8de0"), 0.16))
+	var spot := _ellipse_points(radius * 0.19, radius * 0.11, 0.0, TAU, 20, -0.18, Vector2(radius * 0.28, radius * 0.02))
+	draw_colored_polygon(spot, _surface_color(Color("172b76"), 0.38))
+
+
+func _draw_ring(color: Color, front: bool) -> void:
+	var ring_color := accent_color.lerp(captured_color.lightened(0.34), capture_progress)
+	var from_angle := 0.0
+	var to_angle := PI if front else TAU
+	var ring_points := _ellipse_points(ring_rx, ring_ry, from_angle, to_angle, 64 if not front else 32, ring_angle)
+	draw_polyline(ring_points, Color(ring_color, 0.90), ring_width, true)
+	draw_polyline(ring_points, Color(color.darkened(0.42), 0.82), maxf(1.2, ring_width * 0.20), true)
+
+
+func _draw_makemake(color: Color) -> void:
+	var shadow := _ellipse_points(radius * 1.30, radius * 0.86, 0.0, TAU, 36, -0.13, Vector2(3.0, 5.0))
+	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.12, 0.78))
+	var body := _ellipse_points(radius * 1.28, radius * 0.84, 0.0, TAU, 36, -0.13)
+	draw_colored_polygon(body, color)
+	var patch := _ellipse_points(radius * 0.50, radius * 0.24, 0.0, TAU, 24, -0.20, Vector2(-radius * 0.28, -radius * 0.12))
+	draw_colored_polygon(patch, _surface_color(accent_color, 0.18))
+	_draw_craters(color)
+
+
+func _draw_asteroid(color: Color) -> void:
+	var shadow := PackedVector2Array()
+	for point in asteroid_points:
+		shadow.append(point + Vector2(3.0, 5.0))
+	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.12, 0.78))
+	draw_colored_polygon(asteroid_points, color)
+	_draw_craters(color)
+
+
+func _draw_label() -> void:
+	var half_height := radius
 	if ringed:
-		var front_ring := _ellipse_points(radius * 1.62, radius * 0.50, 0.0, PI, 28)
-		draw_polyline(front_ring, color.lightened(0.48), maxf(5.0, radius * 0.16), true)
-		draw_polyline(front_ring, Color("373d70"), maxf(1.5, radius * 0.035), true)
+		half_height = maxf(half_height, absf(ring_rx * sin(ring_angle)) + absf(ring_ry * cos(ring_angle)))
+	var label_y := half_height + 18.0
+	var label_color := Color("eef3ff") if not captured else captured_color.lightened(0.38)
+	draw_string(font, Vector2(-70.0, label_y), body_name, HORIZONTAL_ALIGNMENT_CENTER, 140.0, 13, Color(0.0, 0.0, 0.0, 0.92))
+	draw_string(font, Vector2(-70.0, label_y - 1.5), body_name, HORIZONTAL_ALIGNMENT_CENTER, 140.0, 13, label_color)
 
 
 func _draw_explosion() -> void:

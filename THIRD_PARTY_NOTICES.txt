@@ -23,3 +23,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Kenney CC0 Assets
+=================
+
+Cosmotops includes selected ship graphics from "Space Shooter Remastered" and
+selected audio from "Sci-Fi Sounds" and "Interface Sounds", created and
+distributed by Kenney (https://kenney.nl/).
+
+These assets are dedicated to the public domain under Creative Commons Zero
+(CC0 1.0): https://creativecommons.org/publicdomain/zero/1.0/
