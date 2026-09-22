@@ -216,6 +216,7 @@ func _body_specs() -> Array[Dictionary]:
 	# Radii deliberately compress the real scale while preserving the recognizable hierarchy.
 	return [
 		{"name": "Sun", "radius": 60.0, "style": "sun"},
+		{"name": "Black Hole", "radius": 30.0, "style": "black_hole"},
 		{"name": "Jupiter", "radius": 54.0, "style": "jupiter"},
 		{"name": "Saturn", "radius": 46.0, "style": "saturn"},
 		{"name": "Uranus", "radius": 38.0, "style": "uranus"},
@@ -282,11 +283,11 @@ func _random_target_positions(specs: Array[Dictionary], rng: RandomNumberGenerat
 			return positions
 	# This irregular layout is reachable only if every randomized packing attempt fails.
 	return [
-		Vector2(150.0, 190.0), Vector2(1010.0, 590.0), Vector2(1110.0, 210.0),
-		Vector2(210.0, 550.0), Vector2(920.0, 180.0), Vector2(390.0, 250.0),
-		Vector2(1120.0, 430.0), Vector2(500.0, 590.0), Vector2(740.0, 180.0),
-		Vector2(320.0, 460.0), Vector2(780.0, 585.0), Vector2(520.0, 145.0),
-		Vector2(680.0, 420.0),
+		Vector2(150.0, 190.0), Vector2(1080.0, 180.0), Vector2(1020.0, 580.0),
+		Vector2(220.0, 560.0), Vector2(780.0, 170.0), Vector2(430.0, 180.0),
+		Vector2(1120.0, 390.0), Vector2(500.0, 580.0), Vector2(880.0, 560.0),
+		Vector2(330.0, 400.0), Vector2(820.0, 390.0), Vector2(500.0, 360.0),
+		Vector2(670.0, 590.0), Vector2(650.0, 140.0),
 	]
 
 
@@ -294,6 +295,7 @@ func _layout_extent(spec: Dictionary) -> float:
 	var radius := float(spec["radius"])
 	match String(spec["style"]):
 		"sun": return radius * 1.22
+		"black_hole": return radius * 2.25
 		"saturn": return radius * 1.75
 		"uranus": return radius * 1.38
 		"makemake": return radius * 1.30
