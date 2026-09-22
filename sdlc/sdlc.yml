@@ -7,7 +7,7 @@ repository:
       platforms:
         - windows
     godot:
-      executable: godot
+      executable: Godot_v4.7.2-stable_win64.exe
       version: 4.7.2
       platforms:
         - windows
@@ -54,11 +54,9 @@ deliverables:
           requires:
             capabilities:
               - godot
-          parameters:
-            - godot_executable
           steps:
             - run:
-                - "{godot_executable}"
+                - Godot_v4.7.2-stable_win64.exe
                 - --headless
                 - --editor
                 - --path
